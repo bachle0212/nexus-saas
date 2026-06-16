@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -76,12 +77,25 @@ export class StoreService {
     }
   }
 
-  async verifyOrder(sessionId: string, orderId: number) {
+  async verifyOrder(user: User, sessionId: string, orderId: number) {
     try {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      // SECURITY: verify session belongs to this user (set at checkout creation)
+      const sessionUserId = session.client_reference_id ?? session.metadata?.user_id;
+      if (!sessionUserId || sessionUserId !== String(user.id)) {
+        throw new ForbiddenException('Session does not belong to this account');
+      }
+
       if (session.payment_status === 'paid') {
         const order = await this.orderRepo.findOne({ where: { id: orderId } });
-        if (order && order.status === 'pending') {
+
+        // SECURITY: verify order belongs to this user
+        if (!order || order.user_id !== user.id) {
+          throw new ForbiddenException('Order does not belong to this account');
+        }
+
+        if (order.status === 'pending') {
           order.status = 'paid';
           const items = await this.orderItemRepo.find({ where: { order_id: order.id } });
           for (const i of items) {
@@ -97,6 +111,7 @@ export class StoreService {
       }
       return { message: 'Payment not completed' };
     } catch (e) {
+      if (e instanceof ForbiddenException) throw e;
       throw new InternalServerErrorException(e.message);
     }
   }

@@ -29,11 +29,13 @@ export class StoreController {
   }
 
   @Post('verify-order')
+  @UseGuards(JwtAuthGuard)
   verifyOrder(
+    @Req() req,
     @Query('session_id') sessionId: string,
     @Query('order_id') orderId: string,
   ) {
-    return this.storeService.verifyOrder(sessionId, +orderId);
+    return this.storeService.verifyOrder(req.user, sessionId, +orderId);
   }
 
   @Get('orders')
