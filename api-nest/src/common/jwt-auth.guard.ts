@@ -11,9 +11,6 @@ import { Repository } from 'typeorm';
 import { User } from '../entities';
 import { SECRET_KEY } from './config';
 
-// Skip CSRF for these paths
-const CSRF_EXEMPT_PATHS = ['/api/auth/me', '/api/billing/plans'];
-
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
@@ -32,13 +29,8 @@ export class JwtAuthGuard implements CanActivate {
 
     const token = authHeader.split(' ')[1];
 
-    // CSRF check for state-changing methods (except exempt paths)
-    const method = request.method;
-    const path = request.path;
-    if (
-      ['POST', 'PUT', 'DELETE'].includes(method) &&
-      !CSRF_EXEMPT_PATHS.some((p) => path.startsWith(p))
-    ) {
+    // CSRF check for all state-changing methods — no exemptions
+    if (['POST', 'PUT', 'DELETE'].includes(request.method)) {
       const headerCsrf = request.headers['x-csrf-token'];
       const cookieCsrf = request.cookies?.csrf_token;
       if (!headerCsrf || !cookieCsrf || headerCsrf !== cookieCsrf) {
